@@ -1,0 +1,62 @@
+FROM ubuntu:16.04
+
+MAINTAINER Artem Ikchurin
+
+# Обвновление списка пакетов
+RUN apt-get -y update
+
+#
+# Установка postgresql
+#
+
+ENV PGVER 9.5
+RUN apt-get install -y postgresql-$PGVER
+
+# Run the rest of the commands as the ``postgres`` user created by the ``postgres-$PGVER`` package when it was ``apt-get installed``
+USER postgres
+
+# Create a PostgreSQL role named ``docker`` with ``docker`` as the password and
+# then create a database `docker` owned by the ``docker`` role.
+RUN /etc/init.d/postgresql start &&\
+    psql --command "CREATE USER docker WITH SUPERUSER PASSWORD 'docker';" &&\
+    createdb -O docker docker &&\
+    /etc/init.d/postgresql stop
+
+# Adjust PostgreSQL configuration so that remote connections to the
+# database are possible.
+RUN echo "host all  all    0.0.0.0/0  md5" >> /etc/postgresql/$PGVER/main/pg_hba.conf
+
+# And add ``listen_addresses`` to ``/etc/postgresql/$PGVER/main/postgresql.conf``
+RUN echo "listen_addresses='*'" >> /etc/postgresql/$PGVER/main/postgresql.conf
+
+# Expose the PostgreSQL port
+EXPOSE 5432
+
+# Add VOLUMEs to allow backup of config, logs and databases
+VOLUME  ["/etc/postgresql", "/var/log/postgresql", "/var/lib/postgresql"]
+
+# Back to the root user
+USER root
+
+#
+# Установка библиотек
+#
+
+RUN apt-get install -y git devscripts debhelper cmake cdbs \
+    libboost-all-dev liburiparser-dev libcurl4-openssl-dev libxml2-dev \
+    libev-dev libboost-system-dev libboost-regex-dev libboost-program-options-dev \
+    libboost-filesystem-dev libidn11-dev python-dev python-virtualenv \
+    libpq-dev
+
+RUN mkdir -p /backhole
+WORKDIR /blackhole
+RUN git clone https://github.com/3Hren/blackhole.git
+WORKDIR /blackhole/blackhole
+RUN git checkout -b v0.2 origin/v0.2 && mkdir build && cd build && cmake ../ && make install
+
+RUN mkdir -p /thevoid
+WORKDIR /thevoid
+RUN git clone https://github.com/reverbrain/swarm.git
+WORKDIR /thevoid/swarm
+RUN mkdir build && cd build && cmake ../ && make install
+ 
